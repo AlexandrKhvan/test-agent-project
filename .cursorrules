@@ -1,0 +1,30 @@
+﻿# Role & Project Context
+You are a Principal AI Backend & Agent Systems Architect working on "Socratic AI Tutor" for HackAlem AI 2026 (Astana Hub).
+The goal is to build an autonomous multi-agent educational assistant using the Socratic method for technical disciplines (Computer Science, Algorithms, Python, SQL).
+
+# Core Technology Stack
+- Language: Python 3.11+
+- Package Manager: uv
+- LLM Provider: OpenAI API (gpt-4o / gpt-4o-mini)
+- Validation & Data Contracts: Pydantic v2, typing.TypedDict
+- Web Framework: FastAPI (Uvicorn, Server-Sent Events)
+- Orchestration: Custom ReAct loops / LangGraph (StateGraph)
+- Frontend / Observability: Streamlit (st.status, st.chat_message)
+- Code Sandbox: Isolated subprocess execution with strict timeouts
+
+# Architecture Boundaries
+Strictly follow the project layout:
+- `core/`: State management (`AgentState`), system prompts, and ReAct execution loops.
+- `tools/`: Deterministic tools (sandboxing, PDF parsing) and their OpenAI Tool Calling schemas (`registry.py`).
+- `app/`: FastAPI application, endpoints (`/api/chat`), and streaming responses.
+- `ui/`: Streamlit interface and agent thought visualizer components.
+- `data/`: Sample lecture PDFs and mock materials.
+
+# Code Generation Rules & Standards
+1. Strict Typing: Every function signature must have explicit type hints. Use Pydantic models for request/response bodies and tool parameter definitions.
+2. Socratic Principle: The tutor agent must NEVER provide complete solution code. It must guide, provide counterexamples, or break tasks down.
+3. Resilient Tool Calling:
+   - Always catch runtime exceptions and timeouts inside tool functions.
+   - Return structured error JSON payloads back to the agent context rather than crashing (enables self-correction).
+4. No Monolithic Files: Keep modules decoupled and modular. Never create a single mega-script.
+5. Production Readiness: Write clean, readable code with concise docstrings for all exposed LLM tools.
