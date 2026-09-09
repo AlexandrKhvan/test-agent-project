@@ -1,0 +1,104 @@
+﻿# ==========================================
+# 1. Секреты, ключи доступа и окружение
+# ==========================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ==========================================
+# 2. Виртуальное окружение (uv / venv / virtualenv)
+# ==========================================
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ==========================================
+# 3. Python и кэш выполнения
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==========================================
+# 4. Streamlit, LangGraph и локальные БД
+# ==========================================
+.streamlit/secrets.toml
+*.sqlite
+*.sqlite3
+*.db
+
+# ==========================================
+# 5. Большие файлы данных и лекции (чтобы не забить Git)
+# ==========================================
+# Игнорируем тяжелые документы в data, оставляя саму структуру папок
+data/sample_materials/*
+!data/sample_materials/.gitkeep
+data/raw/*
+!data/raw/.gitkeep
+*.pdf
+*.docx
+*.pptx
+*.zip
+*.tar.gz
+
+# ==========================================
+# 6. Редакторы кода и IDE (VS Code, Cursor, JetBrains)
+# ==========================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# ==========================================
+# 7. Мусор ОС Windows / OneDrive / macOS / Linux
+# ==========================================
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ==========================================
+# 8. Тесты и линтеры
+# ==========================================
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.tox/
+.coverage
+.coverage.*
