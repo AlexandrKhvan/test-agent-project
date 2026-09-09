@@ -74,7 +74,7 @@ hackalem_edu_agent/
 
 ## 3. Распределение Ролей и Технические Задания
 
-### 👤 Участник 1 (Ты): Pipeline Lead & Mentor Architect
+### 👤 Участник 1 (Саня): Pipeline Lead & Mentor Architect
 - **Зона:** `core/`, `app/`.
 - **Задачи:**
   1. Реализовать состояние `PipelineSessionState` и связать узлы пайплайна в LangGraph (`core/orchestrator.py`).
@@ -106,7 +106,7 @@ Ensure complete, typed Python code with error handling.
 
 ---
 
-### 👤 Участник 2 (Напарник 1): Data Ingestion & Curriculum Engineer
+### 👤 Участник 2 (Артем): Data Ingestion & Curriculum Engineer
 - **Зона:** `ingestion/`, `curriculum/`.
 - **Задачи:**
   1. Реализовать `ingestion/document_parsers.py` для извлечения текста из PDF (`pypdf`), DOCX (`python-docx`), PPTX (`python-pptx`), TeX и MD.
@@ -130,7 +130,7 @@ Requirements:
 
 ---
 
-### 👤 Участник 3 (Напарник 2): Frontend & Pitch Lead
+### 👤 Участник 3 (Даня): Frontend & Pitch Lead
 - **Зона:** `ui/`, подготовка питча.
 - **Задачи:**
   1. Разработать интерфейс `ui/app.py` на Streamlit с визуализацией трех шагов:
