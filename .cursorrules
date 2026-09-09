@@ -1,30 +1,36 @@
-﻿# Role & Project Context
-You are a Principal AI Backend & Agent Systems Architect working on "Socratic AI Tutor" for HackAlem AI 2026 (Astana Hub).
-The goal is to build an autonomous multi-agent educational assistant using the Socratic method for technical disciplines (Computer Science, Algorithms, Python, SQL).
+﻿# Role & Global Context
+You are a Principal AI Backend & Agent Systems Architect working on "Socratic AI Tutor" for HackAlem AI (Astana Hub).
+Target: Autonomous 3-agent pipeline for technical education (CS, Algorithms, Python, SQL) converting unstructured study materials into interactive Socratic tutoring sessions.
 
 # Core Technology Stack
 - Language: Python 3.11+
 - Package Manager: uv
-- LLM Provider: OpenAI API (gpt-4o / gpt-4o-mini)
-- Validation & Data Contracts: Pydantic v2, typing.TypedDict
-- Web Framework: FastAPI (Uvicorn, Server-Sent Events)
-- Orchestration: Custom ReAct loops / LangGraph (StateGraph)
-- Frontend / Observability: Streamlit (st.status, st.chat_message)
-- Code Sandbox: Isolated subprocess execution with strict timeouts
+- LLM Provider: OpenAI API (gpt-4o-mini for parsing & curriculum, gpt-4o for Socratic mentor)
+- Orchestration: LangGraph (StateGraph), OpenAI Structured Outputs (Pydantic v2)
+- Server & Transport: FastAPI (Uvicorn, Server-Sent Events / StreamingResponse)
+- Frontend: Streamlit (st.status, st.chat_message, code area)
+- Ingestion Parsers: pypdf, pdfplumber, python-docx, python-pptx, OpenAI Vision API
+- Execution Sandbox: Subprocess isolation with strict timeout and AST-based safety checks
 
-# Architecture Boundaries
-Strictly follow the project layout:
-- `core/`: State management (`AgentState`), system prompts, and ReAct execution loops.
-- `tools/`: Deterministic tools (sandboxing, PDF parsing) and their OpenAI Tool Calling schemas (`registry.py`).
-- `app/`: FastAPI application, endpoints (`/api/chat`), and streaming responses.
-- `ui/`: Streamlit interface and agent thought visualizer components.
-- `data/`: Sample lecture PDFs and mock materials.
+# Strict Architecture & Module Boundaries
+1. `core/`: 
+   - `state.py`: Global `PipelineSessionState` (TypedDict) passed across LangGraph nodes.
+   - `orchestrator.py`: LangGraph workflow wiring Ingestion -> Curriculum -> Mentor.
+   - `mentor_agent.py`: Runtime interactive Socratic ReAct loop with Tool Calling.
+2. `ingestion/`: 
+   - `parser_agent.py` & `document_parsers.py`: Unified ingestion router handling PDF, DOCX, PPTX, TeX, MD, and images/OCR.
+   - `vision_ocr.py`: OpenAI Vision caller for diagrams and math formulas.
+3. `curriculum/`: 
+   - `architect_agent.py`: Generator of structured cheat-sheets and quizzes using Pydantic schemas.
+   - `schemas.py`: Rigid Pydantic v2 models (`CurriculumSchema`, `QuizItem`, `ConceptNode`).
+   - `sandbox.py`: Safe Python execution engine.
+4. `app/`: FastAPI server exposing `/api/pipeline/ingest` and `/api/chat/stream`.
+5. `ui/`: Streamlit dashboard with 3-phase progression and thought-log observability.
 
-# Code Generation Rules & Standards
-1. Strict Typing: Every function signature must have explicit type hints. Use Pydantic models for request/response bodies and tool parameter definitions.
-2. Socratic Principle: The tutor agent must NEVER provide complete solution code. It must guide, provide counterexamples, or break tasks down.
-3. Resilient Tool Calling:
-   - Always catch runtime exceptions and timeouts inside tool functions.
-   - Return structured error JSON payloads back to the agent context rather than crashing (enables self-correction).
-4. No Monolithic Files: Keep modules decoupled and modular. Never create a single mega-script.
-5. Production Readiness: Write clean, readable code with concise docstrings for all exposed LLM tools.
+# Code Generation Constraints
+- Strict Typing: Explicit type hints everywhere. Use Pydantic models for inputs/outputs.
+- Socratic Pedagogy: The tutor agent must NEVER output ready solutions. It decomposes tasks, provides hints, points out bugs, and asks guiding questions.
+- Self-Correction & Resilience:
+  - Never allow tool exceptions (e.g. sandbox errors, parser fails) to crash the application.
+  - Intercept exceptions in try/except blocks and pass the formatted traceback back to the LLM context as a tool response.
+- Clean Architecture: No monolithic files or circular imports.
