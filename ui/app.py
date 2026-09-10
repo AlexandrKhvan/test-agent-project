@@ -31,7 +31,7 @@ st.markdown(
         }
 
         .block-container {
-            padding-top: 2rem;
+            padding-top: 3.5rem;;
         }
 
         .loading-copy {
@@ -75,11 +75,12 @@ def generate_tutor_reply(_prompt: str) -> str:
 
 def render_brand_header() -> None:
     """Show the local logo beside the app title instead of a title emoji."""
-    logo_column, title_column = st.columns([1, 10])
+    logo_column, title_column = st.columns([1, 10], vertical_alignment="center")
     with logo_column:
-        st.image(str(LOGO_PATH), width=50)
+        st.image(str(LOGO_PATH), width=70)
     with title_column:
-        st.title("Socratic AI Tutor")
+        # Убираем стандартный отступ заголовка, чтобы он не влиял на высоту строки
+        st.markdown('<h1 style="margin: 0; padding: 0;">Socratic AI Tutor</h1>', unsafe_allow_html=True)
 
 
 def render_loading_state() -> None:
