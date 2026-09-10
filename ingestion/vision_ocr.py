@@ -43,12 +43,23 @@ def extract_text_from_image(image_path_or_bytes: ImageSource) -> str:
             return ""
 
         from openai import OpenAI
+        import os
+        from dotenv import load_dotenv
+
+        # 1. Принудительно читаем файл .env
+        load_dotenv()
 
         encoded_image = base64.b64encode(image_bytes).decode("ascii")
-        client = OpenAI()
         
+        # 2. Подменяем OpenAI на бесплатный Gemini, как просил тимлид
+        client = OpenAI(
+            api_key=os.environ.get("GEMINI_API_KEY"),
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+        )
+        
+        # 3. Меняем модель с gpt-4o-mini на gemini-2.0-flash
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gemini-3.6-flash",
             messages=[
                 {
                     "role": "user",
