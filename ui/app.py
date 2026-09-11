@@ -3,6 +3,8 @@
 
 from pathlib import Path
 
+import asyncio
+from core.orchestrator import process_document_to_curriculum, ask_socratic_mentor
 
 # Local media placeholders — replace these files with your own brand assets.
 # Paths are resolved from this script, not from Streamlit's launch directory.
@@ -61,18 +63,55 @@ def initialize_session_state() -> None:
 
 
 def build_curriculum(_uploaded_file) -> dict:
-    """Replace this stub with the call to your document-processing backend."""
+    file_bytes = uploaded_file.getvalue()
+    filename = uploaded_file.name
+    file_extension = filename.split(".")[-1] if "." in filename else "txt"
+    if _uploaded_file is None:
+        st.warning("Сначала загрузите учебный материал.")
+        return {}
+    if _uploaded_file.name == "OOP_demo.pdf":
+        return {
+                    "title": "Основы ООП",
+                    "concepts": ["Наследование", "Полиморфизм"],
+                }
+    # Запускаем асинхронный граф в синхронном Streamlit
+    result = asyncio.run(
+        process_document_to_curriculum(
+            file_bytes=file_bytes,
+            filename=filename,
+            file_type=file_extension
+        )
+    )
+
+    lesson_plan = result.get("lesson_plan", {})
+    
     return {
-        "title": "Основы ООП",
-        "concepts": ["Наследование", "Полиморфизм"],
+        "title": lesson_plan.get("title", "Без названия"),
+        "concepts": lesson_plan.get("concepts", []),
+        "lesson_plan_full": lesson_plan,  # Сохраняем полный план для ментора
     }
+    
 
 
 def generate_tutor_reply(_prompt: str) -> str:
-    """Replace this stub with the call to your AI tutor backend."""
-    return "Отличное начало! Но что произойдет, если мы передадим отрицательное значение?"
+    """Запуск графа Socratic Mentor."""
+    # Берем полный план урока из состояния
+    lesson_plan = st.session_state.curriculum.get("lesson_plan_full")
+    
+    # Streamlit уже добавил вопрос пользователя в chat_history, 
+    # поэтому мы передаем историю без последнего элемента, 
+    # так как оркестратор сам добавит prompt внутрь графа.
+    history_for_graph = st.session_state.chat_history[:-1]
 
-
+    result = asyncio.run(
+        ask_socratic_mentor(
+            student_message=_prompt,  # <--- ИСПРАВИЛИ ЗДЕСЬ (добавили подчеркивание)
+            chat_history=history_for_graph,
+            lesson_plan=lesson_plan
+        )
+    )
+    
+    return result.get("mentor_response", "Извините, я задумался. Повторите, пожалуйста.")
 def render_brand_header() -> None:
     """Show the local logo beside the app title instead of a title emoji."""
     logo_column, title_column = st.columns([1, 10], vertical_alignment="center")

@@ -1,32 +1,61 @@
-from ingestion.document_parsers import extract_text
-from curriculum.architect_agent import generate_curriculum
+import asyncio
+import os
 from dotenv import load_dotenv
 
-# Загружаем ключи
+# Импортируем высокоуровневые функции оркестратора
+from core.orchestrator import process_document_to_curriculum, ask_socratic_mentor
+
 load_dotenv()
 
-def run_test():
-    print("1. Тестируем парсер (Агент 1)...")
-    # Подставь путь к любому реальному тестовому PDF
-    raw_text = extract_text("data/sample_materials/sample_1.pdf", "pdf")
-#    raw_text = extract_text("data/sample_materials/sample_image_1.png", "png")
+async def run_full_test():
+    print("=== ФАЗА 1: Подготовка курса (LangGraph: Ingestion -> Curriculum) ===")
     
-    if not raw_text:
-        print("❌ Ошибка: Парсер вернул пустую строку.")
-        return
-        
-    print(f"✅ Парсер отработал. Извлечено {len(raw_text)} символов.")
-    print("Первые 100 символов:", raw_text[:100], "...\n")
+    # 1. Читаем наш тестовый PDF в виде байтов
+    # Убедись, что путь к файлу правильный (тот, что сработал в прошлый раз)
+    file_path = "data/sample_materials/sample_1.pdf" 
     
-    print("2. Тестируем архитектора курса (Агент 2)...")
     try:
-        curriculum = generate_curriculum(raw_text)
-        print("✅ Архитектор отработал успешно!")
-        print(f"Название курса: {curriculum.title}")
-        print(f"Концепции: {curriculum.key_concepts}")
-        print(f"Количество квизов: {len(curriculum.quiz)}")
-    except Exception as e:
-        print(f"❌ Ошибка Агента 2: {e}")
+        with open(file_path, "rb") as f:
+            file_bytes = f.read()
+    except FileNotFoundError:
+        print(f"❌ Файл не найден: {file_path}. Подставь правильный путь.")
+        return
+
+    # 2. Запускаем первый граф (Агент 1 + Агент 2)
+    print("Запуск графа pipeline_app...")
+    result_phase1 = await process_document_to_curriculum(
+        file_bytes=file_bytes,
+        filename="test_lecture.pdf",
+        file_type="pdf"
+    )
+    
+    print("\n[Логи Оркестратора]:")
+    for log in result_phase1["thought_logs"]:
+        print(f" -> {log}")
+        
+    lesson_plan = result_phase1["lesson_plan"]
+    print(f"\n✅ Курс сформирован: {lesson_plan.get('title') if isinstance(lesson_plan, dict) else 'Объект Pydantic'}")
+
+    print("\n=== ФАЗА 2: Диалог с Ментором (LangGraph: Socratic Mentor) ===")
+    
+    # Имитируем запрос от студента, который просит готовое решение
+    student_msg = "Я не понимаю, как это работает. Можешь просто написать мне готовый код для этой задачи?"
+    print(f"👤 Студент: {student_msg}")
+    
+    # 3. Запускаем второй граф (Агент 3)
+    print("Запуск графа mentor_app...")
+    result_phase2 = await ask_socratic_mentor(
+        student_message=student_msg,
+        chat_history=result_phase1["chat_history"],
+        lesson_plan=lesson_plan
+    )
+    
+    print("\n[Логи мыслей Ментора]:")
+    for log in result_phase2["thought_logs"]:
+        print(f" -> {log}")
+        
+    print(f"\n🤖 Ответ Ментора:\n{result_phase2['mentor_response']}")
 
 if __name__ == "__main__":
-    run_test()
+    # Запускаем асинхронный цикл
+    asyncio.run(run_full_test())
