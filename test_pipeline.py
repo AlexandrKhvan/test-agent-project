@@ -8,7 +8,8 @@ load_dotenv()
 def run_test():
     print("1. Тестируем парсер (Агент 1)...")
     # Подставь путь к любому реальному тестовому PDF
-    raw_text = extract_text("data/sample_materials/sample_image_1.png", "png")
+    raw_text = extract_text("data/sample_materials/sample_1.pdf", "pdf")
+#    raw_text = extract_text("data/sample_materials/sample_image_1.png", "png")
     
     if not raw_text:
         print("❌ Ошибка: Парсер вернул пустую строку.")

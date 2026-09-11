@@ -15,6 +15,8 @@ from pathlib import Path
 import re
 from typing import BinaryIO, Callable, TypeAlias
 
+from ingestion.vision_ocr import extract_text_from_image
+
 logger = logging.getLogger(__name__)
 
 DocumentSource: TypeAlias = bytes | bytearray | memoryview | str | Path | BinaryIO
@@ -149,6 +151,8 @@ def extract_text(source: DocumentSource, file_type: str) -> str:
         return extract_pptx_text(source)
     if normalized in {"tex", "latex", "md", "markdown", "txt", "text/plain"}:
         return extract_plain_text(source)
+    if normalized in {"png", "jpg", "jpeg", "image/png", "image/jpeg"}:
+        return extract_text_from_image(source)
     logger.warning("Unsupported document type: %s", file_type)
     return ""
 

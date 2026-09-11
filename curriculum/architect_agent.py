@@ -1,5 +1,7 @@
 """Generate a typed curriculum from unstructured educational material."""
 
+import os
+from dotenv import load_dotenv
 from openai import OpenAI, OpenAIError
 
 from curriculum.schemas import CurriculumSchema
@@ -23,15 +25,24 @@ def generate_curriculum(raw_text: str) -> CurriculumSchema:
 
     Raises:
         ValueError: If ``raw_text`` is empty.
-        RuntimeError: If the OpenAI request fails, is refused, or is not parsed.
+        RuntimeError: If the request fails, is refused, or is not parsed.
     """
     if not raw_text or not raw_text.strip():
         raise ValueError("raw_text must contain educational material.")
 
     try:
-        client = OpenAI()
+        # 1. Читаем .env файл (где лежит GEMINI_API_KEY)
+        load_dotenv()
+        
+        # 2. Подменяем OpenAI на Gemini через совместимый API
+        client = OpenAI(
+            api_key=os.environ.get("GEMINI_API_KEY"),
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+        )
+        
+        # 3. Используем модель Gemini с поддержкой Structured Outputs
         completion = client.beta.chat.completions.parse(
-            model="gpt-4o-mini",
+            model="gemini-3.6-flash",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": raw_text.strip()},
@@ -40,7 +51,9 @@ def generate_curriculum(raw_text: str) -> CurriculumSchema:
         )
 
         message = completion.choices[0].message
-        if message.refusal:
+        
+        # Безопасная проверка на отказ модели
+        if getattr(message, "refusal", None):
             raise RuntimeError(f"The model refused the request: {message.refusal}")
 
         curriculum = message.parsed
@@ -49,6 +62,7 @@ def generate_curriculum(raw_text: str) -> CurriculumSchema:
 
         return curriculum
     except OpenAIError as exc:
-        raise RuntimeError("Unable to generate the curriculum through OpenAI.") from exc
+        # Измененный текст ошибки, чтобы мы сразу видели причину
+        raise RuntimeError(f"Unable to generate the curriculum: {exc}") from exc
     except (AttributeError, IndexError, TypeError) as exc:
-        raise RuntimeError("OpenAI returned an unexpected curriculum response.") from exc
+        raise RuntimeError("API returned an unexpected curriculum response.") from exc
