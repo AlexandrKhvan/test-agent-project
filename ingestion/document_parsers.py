@@ -130,10 +130,13 @@ def extract_plain_text(source: DocumentSource) -> str:
 def _tex_to_markdown_headings(text: str) -> str:
     """Map common LaTeX section commands to Markdown headings."""
     for command, level in _TEX_HEADINGS:
-        pattern = r"(?m)^\s\\" + command + r"\*?\{([^}]+)\}\s*$"
-        text = re.sub(pattern, lambda match: f"{'#' * level} {match.group(1).strip()}", text)
+        pattern = rf"(?m)^[\t ]*\\{command}\*?\{{([^}}]+)\}}[\t ]*$"
+        text = re.sub(
+            pattern,
+            lambda match: f"{'#' * level} {match.group(1).strip()}",
+            text,
+        )
     return text
-
 
 def extract_text(source: DocumentSource, file_type: str) -> str:
     """Dispatch extraction by extension or MIME-like ``file_type`` string.
