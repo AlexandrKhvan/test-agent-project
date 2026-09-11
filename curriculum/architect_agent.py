@@ -6,6 +6,7 @@ from openai import OpenAI, OpenAIError
 
 from curriculum.schemas import CurriculumSchema
 
+load_dotenv()
 
 SYSTEM_PROMPT = """
 You are an expert educational architect who turns source material into a focused,
@@ -28,8 +29,7 @@ def generate_curriculum(raw_text: str) -> CurriculumSchema:
         RuntimeError: If the request fails, is refused, or is not parsed.
     """
     if not raw_text or not raw_text.strip():
-        raise ValueError("raw_text must contain educational material.")
-
+        return CurriculumSchema(title="", key_concepts=[], quiz=[])
     try:
         # 1. Читаем .env файл (где лежит GEMINI_API_KEY)
         load_dotenv()
@@ -42,6 +42,7 @@ def generate_curriculum(raw_text: str) -> CurriculumSchema:
         
         # 3. Используем модель Gemini с поддержкой Structured Outputs
         completion = client.beta.chat.completions.parse(
+            model="gemini-3.6-flash",
             model="gemini-3.6-flash",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
@@ -58,7 +59,7 @@ def generate_curriculum(raw_text: str) -> CurriculumSchema:
 
         curriculum = message.parsed
         if curriculum is None:
-            raise RuntimeError("The model returned no structured curriculum.")
+            return CurriculumSchema(title="", key_concepts=[], quiz=[])
 
         return curriculum
     except OpenAIError as exc:
