@@ -63,8 +63,8 @@ def initialize_session_state() -> None:
 
 
 def build_curriculum(_uploaded_file) -> dict:
-    file_bytes = uploaded_file.getvalue()
-    filename = uploaded_file.name
+    file_bytes = _uploaded_file.getvalue()
+    filename = _uploaded_file.name
     file_extension = filename.split(".")[-1] if "." in filename else "txt"
     if _uploaded_file is None:
         st.warning("Сначала загрузите учебный материал.")
@@ -84,11 +84,14 @@ def build_curriculum(_uploaded_file) -> dict:
     )
 
     lesson_plan = result.get("lesson_plan", {})
+    extracted_concepts = lesson_plan.get("key_concepts", [])
     
+    # Вытаскиваем только названия концепций, если это список словарей
+
     return {
         "title": lesson_plan.get("title", "Без названия"),
-        "concepts": lesson_plan.get("concepts", []),
-        "lesson_plan_full": lesson_plan,  # Сохраняем полный план для ментора
+        "concepts": extracted_concepts,  # <--- Теперь отдаем правильный список!
+        "lesson_plan_full": lesson_plan,
     }
     
 
@@ -181,6 +184,11 @@ if not st.session_state.file_processed:
     st.info("Загрузите документ в панели слева, чтобы начать.")
 else:
     st.subheader(f"Текущая тема: {st.session_state.curriculum['title']}")
+    # # --- НАШ НОВЫЙ БЛОК ОТЛАДКИ ---
+    # with st.expander("🛠 ОТЛАДКА: Что реально вернул Агент 2?"):
+    #     st.json(st.session_state.curriculum.get("lesson_plan_full", {}))
+    # # ------------------------------
+
     with st.expander("Ключевые концепции (развернуть)"):
         st.write(st.session_state.curriculum["concepts"])
 

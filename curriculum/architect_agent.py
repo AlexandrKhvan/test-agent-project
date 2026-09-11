@@ -43,7 +43,6 @@ def generate_curriculum(raw_text: str) -> CurriculumSchema:
         # 3. Используем модель Gemini с поддержкой Structured Outputs
         completion = client.beta.chat.completions.parse(
             model="gemini-3.6-flash",
-            model="gemini-3.6-flash",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": raw_text.strip()},
