@@ -22,7 +22,7 @@ def get_async_llm_client() -> tuple[AsyncOpenAI, str]:
             api_key=api_key,
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
         )
-        model = os.getenv("LLM_MODEL", "gemini-2.0-flash")
+        model = os.getenv("LLM_MODEL", "gemini-3.6-flash")
         return client, model
     else:
         api_key = os.getenv("OPENAI_API_KEY")
