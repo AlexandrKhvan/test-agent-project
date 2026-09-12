@@ -1,6 +1,7 @@
 ﻿# core/orchestrator.py
 import json
 import logging
+import io
 from typing import Dict, Any, Optional
 
 from langgraph.graph import StateGraph, END
@@ -25,11 +26,17 @@ async def ingestion_node(state: PipelineSessionState) -> Dict[str, Any]:
     
     logs = list(state.get("thought_logs", []))
     logs.append(f"📄 [Ingestion Agent] Обработка файла `{filename}` ({file_type})...")
-
+    markdown_result = ""
     # Пытаемся вызвать реализацию Напарника 1, если модуль уже слит
     try:
-        from ingestion.parser_agent import parse_document
-        markdown_result = await parse_document(file_bytes=file_bytes, filename=filename)
+        import io
+        from ingestion.document_parsers import extract_text
+        
+        # 1. Заворачиваем байты в поток
+        file_stream = io.BytesIO(file_bytes)
+        # 2. ВЫЗЫВАЕМ функцию и сохраняем результат!
+        markdown_result = extract_text(file_stream, file_type)
+        
         logs.append("✅ [Ingestion Agent] Документ успешно разобран и структурирован в Markdown.")
     except (ImportError, AttributeError):
         # Graceful fallback для изолированной разработки
@@ -57,16 +64,17 @@ async def curriculum_node(state: PipelineSessionState) -> Dict[str, Any]:
     markdown_content = state.get("parsed_markdown", "")
     logs = list(state.get("thought_logs", []))
     logs.append("🧠 [Curriculum Architect] Извлечение ключевых концепций и генерация задач...")
-
-    # Пытаемся вызвать реализацию Напарника 1
+# Пытаемся вызвать нашу реальную реализацию
+    lession_plan = {}
     try:
-        from curriculum.architect_agent import build_curriculum
-        curriculum_data = await build_curriculum(markdown_content)
+        from curriculum.architect_agent import generate_curriculum
+        # Снова убираем await
+        curriculum_data = generate_curriculum(markdown_content)
         lesson_plan = curriculum_data.model_dump() if hasattr(curriculum_data, "model_dump") else curriculum_data
         logs.append("✅ [Curriculum Architect] Учебный план и проверочные кейсы сгенерированы.")
-    except (ImportError, AttributeError):
+    except Exception as e:
         # Graceful fallback для изолированной разработки
-        logger.warning("curriculum.architect_agent еще не реализован. Используем фоллбэк.")
+        logger.warning(f"Ошибка архитектора: {e}. Используем фоллбэк.")
         lesson_plan = {
             "title": "Основы графов и поиск в глубину (DFS)",
             "summary": "Разбор рекурсивного обхода графа, структуры стека и отслеживания посещенных вершин.",
@@ -74,16 +82,11 @@ async def curriculum_node(state: PipelineSessionState) -> Dict[str, Any]:
             "quizzes": [
                 {
                     "concept": "Множество visited",
-                    "problem_statement": "Реализуйте функцию dfs(graph, start, visited=None), возвращающую порядок обхода вершин.",
-                    "hints": [
-                        "Что произойдет, если в графе есть цикл, а visited отсутствует?",
-                        "Какую коллекцию в Python эффективнее использовать для быстрой проверки `in` за O(1)?"
-                    ]
+                    "problem_statement": "Реализуйте функцию dfs(graph, start, visited=None), возвращающую порядок обхода вершин."
                 }
             ]
         }
         logs.append("ℹ️ [Curriculum Architect] Применен тестовый шаблон учебного плана.")
-
     return {
         "lesson_plan": lesson_plan,
         "thought_logs": logs
