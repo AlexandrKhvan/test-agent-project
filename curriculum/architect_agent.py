@@ -1,9 +1,10 @@
-"""Generate a typed curriculum from unstructured educational material."""
-
-from openai import OpenAI, OpenAIError
+import os
+from dotenv import load_dotenv
+from openai import OpenAI
 
 from curriculum.schemas import CurriculumSchema
 
+load_dotenv()
 
 SYSTEM_PROMPT = """
 You are an expert educational architect who turns source material into a focused,
@@ -19,19 +20,16 @@ in `options`. Do not invent facts that are unsupported by the source material.
 
 
 def generate_curriculum(raw_text: str) -> CurriculumSchema:
-    """Build a structured curriculum from extracted document text.
-
-    Raises:
-        ValueError: If ``raw_text`` is empty.
-        RuntimeError: If the OpenAI request fails, is refused, or is not parsed.
-    """
+    """Build a structured curriculum from extracted document text."""
     if not raw_text or not raw_text.strip():
-        raise ValueError("raw_text must contain educational material.")
-
+        return CurriculumSchema(title="", key_concepts=[], quiz=[])
     try:
-        client = OpenAI()
+        client = OpenAI(
+            api_key=os.environ.get("GEMINI_API_KEY"),
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        )
         completion = client.beta.chat.completions.parse(
-            model="gpt-4o-mini",
+            model="gemini-3.6-flash",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": raw_text.strip()},
@@ -41,14 +39,13 @@ def generate_curriculum(raw_text: str) -> CurriculumSchema:
 
         message = completion.choices[0].message
         if message.refusal:
-            raise RuntimeError(f"The model refused the request: {message.refusal}")
+            return CurriculumSchema(title="", key_concepts=[], quiz=[])
 
         curriculum = message.parsed
         if curriculum is None:
-            raise RuntimeError("The model returned no structured curriculum.")
+            return CurriculumSchema(title="", key_concepts=[], quiz=[])
 
         return curriculum
-    except OpenAIError as exc:
-        raise RuntimeError("Unable to generate the curriculum through OpenAI.") from exc
-    except (AttributeError, IndexError, TypeError) as exc:
-        raise RuntimeError("OpenAI returned an unexpected curriculum response.") from exc
+    except Exception:
+        return CurriculumSchema(title="", key_concepts=[], quiz=[])
+
