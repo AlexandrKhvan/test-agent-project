@@ -13,6 +13,8 @@ class PipelineSessionState(TypedDict):
 
     # Данные после Агента 1 (Ingestion)
     parsed_markdown: str
+    material_index: List[Dict[str, Any]]
+    curriculum_source: str
 
     # Данные после Агента 2 (Curriculum Architect)
     lesson_plan: Optional[Dict[str, Any]]

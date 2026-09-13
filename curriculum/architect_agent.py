@@ -40,6 +40,11 @@ def _environment_float(name: str, default: float) -> float:
         return default
 
 
+def get_curriculum_source_limit() -> int:
+    """Return the shared source budget for both direct and indexed materials."""
+    return max(4_000, _environment_int("CURRICULUM_MAX_SOURCE_CHARS", _DEFAULT_MAX_SOURCE_CHARS))
+
+
 def prepare_curriculum_source(raw_text: str) -> tuple[str, bool]:
     """Keep a long upload within a predictable free-tier prompt budget.
 
@@ -48,10 +53,7 @@ def prepare_curriculum_source(raw_text: str) -> tuple[str, bool]:
     than silently discarding the tail of a lecture.
     """
     normalized = re.sub(r"\n{3,}", "\n\n", raw_text).strip()
-    try:
-        max_chars = max(4_000, _environment_int("CURRICULUM_MAX_SOURCE_CHARS", _DEFAULT_MAX_SOURCE_CHARS))
-    except ValueError:
-        max_chars = _DEFAULT_MAX_SOURCE_CHARS
+    max_chars = get_curriculum_source_limit()
 
     if len(normalized) <= max_chars:
         return normalized, False

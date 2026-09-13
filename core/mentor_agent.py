@@ -5,7 +5,7 @@ import inspect
 import os
 import re
 from time import perf_counter
-from typing import AsyncGenerator, Dict, Any, List
+from typing import AsyncGenerator, Dict, Any, List, Optional
 from core.llm_client import get_async_llm_client
 
 SOCRATIC_SYSTEM_PROMPT = """
@@ -81,7 +81,8 @@ def _compact_lesson_plan(lesson_plan: Dict[str, Any]) -> str:
 async def run_socratic_turn(
     messages: List[Dict[str, Any]],
     available_tools: Dict[str, Any],
-    lesson_plan: Optional[Dict[str, Any]] = None
+    lesson_plan: Optional[Dict[str, Any]] = None,
+    relevant_material: Optional[List[Dict[str, str]]] = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Выполняет один интерактивный ход ментора со стримингом мыслей и ответов.
@@ -93,6 +94,11 @@ async def run_socratic_turn(
     system_text = SOCRATIC_SYSTEM_PROMPT
     if lesson_plan:
         system_text += f"\n\nТЕКУЩИЙ УРОК:\nЗадачи и концепты: {_compact_lesson_plan(lesson_plan)}"
+    if relevant_material:
+        material_context = "\n\n".join(
+            f"### Источник: {chunk['title']}\n{chunk['content']}" for chunk in relevant_material
+        )
+        system_text += f"\n\nРЕЛЕВАНТНЫЕ ФРАГМЕНТЫ МАТЕРИАЛА:\n{material_context}"
 
     context_messages.append({"role": "system", "content": system_text})
     recent_messages = _compact_history(messages)

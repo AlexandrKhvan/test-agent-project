@@ -10,6 +10,7 @@ from typing import Dict, Any, Optional
 from langgraph.graph import StateGraph, END
 from core.state import PipelineSessionState
 from core.mentor_agent import run_socratic_turn
+from curriculum.material_index import build_course_digest, retrieve_relevant_chunks, split_material_into_chunks
 
 logger = logging.getLogger("orchestrator")
 
@@ -70,7 +71,7 @@ async def curriculum_node(state: PipelineSessionState) -> Dict[str, Any]:
     Узел 2: Архитектор программы обучения (Curriculum Architect).
     Генерирует конспект, граф понятий и практические задания.
     """
-    markdown_content = state.get("parsed_markdown", "")
+    markdown_content = state.get("curriculum_source") or state.get("parsed_markdown", "")
     logs = list(state.get("thought_logs", []))
     logs.append("🧠 [Curriculum Architect] Извлечение ключевых концепций и генерация задач...")
     started_at = perf_counter()
@@ -106,6 +107,26 @@ async def curriculum_node(state: PipelineSessionState) -> Dict[str, Any]:
     }
 
 
+async def material_index_node(state: PipelineSessionState) -> Dict[str, Any]:
+    """Index every section of a long document before generating its global course."""
+    markdown = state.get("parsed_markdown", "")
+    logs = list(state.get("thought_logs", []))
+    from curriculum.architect_agent import get_curriculum_source_limit, prepare_curriculum_source
+
+    _, needs_index = prepare_curriculum_source(markdown)
+    if not needs_index:
+        return {"material_index": [], "curriculum_source": markdown, "thought_logs": logs}
+
+    chunks = await asyncio.to_thread(split_material_into_chunks, markdown)
+    max_chars = get_curriculum_source_limit()
+    digest = await asyncio.to_thread(build_course_digest, chunks, max_chars)
+    logs.append(
+        f"🗂️ [Material Index] Документ разбит на {len(chunks)} разделов; "
+        "в общий план вошли краткие представления всех разделов."
+    )
+    return {"material_index": chunks, "curriculum_source": digest, "thought_logs": logs}
+
+
 async def mentor_node(state: PipelineSessionState) -> Dict[str, Any]:
     """
     Узел 3: Интерактивный Сократический ментор.
@@ -114,6 +135,7 @@ async def mentor_node(state: PipelineSessionState) -> Dict[str, Any]:
     student_input = state.get("student_latest_input", "")
     chat_history = list(state.get("chat_history", []))
     lesson_plan = state.get("lesson_plan")
+    material_index = state.get("material_index", [])
     logs = list(state.get("thought_logs", []))
 
     if student_input:
@@ -133,7 +155,11 @@ async def mentor_node(state: PipelineSessionState) -> Dict[str, Any]:
 
     started_at = perf_counter()
     final_response = ""
-    async for event in run_socratic_turn(chat_history, tools_registry, lesson_plan):
+    relevant_material = await asyncio.to_thread(retrieve_relevant_chunks, student_input, material_index)
+    if relevant_material:
+        logs.append(f"🔎 [Material Index] В контекст ментора добавлено {len(relevant_material)} релевантных раздела(ов).")
+
+    async for event in run_socratic_turn(chat_history, tools_registry, lesson_plan, relevant_material):
         if event["type"] == "thought":
             logs.append(event["content"])
         elif event["type"] == "answer":
@@ -161,10 +187,12 @@ def build_ingestion_curriculum_pipeline():
     builder = StateGraph(PipelineSessionState)
 
     builder.add_node("ingestion_agent", ingestion_node)
+    builder.add_node("material_index", material_index_node)
     builder.add_node("curriculum_architect", curriculum_node)
 
     builder.set_entry_point("ingestion_agent")
-    builder.add_edge("ingestion_agent", "curriculum_architect")
+    builder.add_edge("ingestion_agent", "material_index")
+    builder.add_edge("material_index", "curriculum_architect")
     builder.add_edge("curriculum_architect", END)
 
     return builder.compile()
@@ -213,6 +241,8 @@ async def process_document_to_curriculum(
         "filename": filename,
         "file_type": file_type,
         "parsed_markdown": "",
+        "material_index": [],
+        "curriculum_source": "",
         "lesson_plan": None,
         "chat_history": [],
         "student_latest_input": "",
@@ -234,7 +264,8 @@ async def process_document_to_curriculum(
 async def ask_socratic_mentor(
     student_message: str,
     chat_history: list,
-    lesson_plan: Optional[dict] = None
+    lesson_plan: Optional[dict] = None,
+    material_index: Optional[list[dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
     Запускает фазу 3: обработку ответа/вопроса студента через ментора.
@@ -244,6 +275,8 @@ async def ask_socratic_mentor(
         "filename": "",
         "file_type": "",
         "parsed_markdown": "",
+        "material_index": material_index or [],
+        "curriculum_source": "",
         "lesson_plan": lesson_plan,
         "chat_history": chat_history,
         "student_latest_input": student_message,
