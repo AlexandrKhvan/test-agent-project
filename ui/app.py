@@ -56,6 +56,7 @@ def initialize_session_state() -> None:
         "is_generating": False,
         "pending_action": None,
         "pending_prompt": None,
+        "last_processing_logs": [],
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -92,11 +93,12 @@ def build_curriculum(_uploaded_file) -> dict:
         "title": lesson_plan.get("title", "Без названия"),
         "concepts": extracted_concepts,  # <--- Теперь отдаем правильный список!
         "lesson_plan_full": lesson_plan,
+        "thought_logs": result.get("thought_logs", []),
     }
     
 
 
-def generate_tutor_reply(_prompt: str) -> str:
+def generate_tutor_reply(_prompt: str) -> tuple[str, list[str]]:
     """Запуск графа Socratic Mentor."""
     # Берем полный план урока из состояния
     lesson_plan = st.session_state.curriculum.get("lesson_plan_full")
@@ -114,7 +116,10 @@ def generate_tutor_reply(_prompt: str) -> str:
         )
     )
     
-    return result.get("mentor_response", "Извините, я задумался. Повторите, пожалуйста.")
+    return (
+        result.get("mentor_response", "Извините, я задумался. Повторите, пожалуйста."),
+        result.get("thought_logs", []),
+    )
 def render_brand_header() -> None:
     """Show the local logo beside the app title instead of a title emoji."""
     logo_column, title_column = st.columns([1, 10], vertical_alignment="center")
@@ -164,14 +169,16 @@ if st.session_state.is_generating:
     if st.session_state.pending_action == "build_curriculum":
         with st.spinner("Агенты анализируют документ…"):
             st.session_state.curriculum = build_curriculum(uploaded_file)
+            st.session_state.last_processing_logs = st.session_state.curriculum.get("thought_logs", [])
             st.session_state.file_processed = True
 
     elif st.session_state.pending_action == "generate_reply":
         with st.spinner("Тьютор формулирует вопрос…"):
-            response = generate_tutor_reply(st.session_state.pending_prompt)
+            response, logs = generate_tutor_reply(st.session_state.pending_prompt)
             st.session_state.chat_history.append(
                 {"role": "assistant", "content": response}
             )
+            st.session_state.last_processing_logs = logs
 
     # Generation has completed; clear the loading state and redraw without video.
     st.session_state.is_generating = False
@@ -191,6 +198,11 @@ else:
 
     with st.expander("Ключевые концепции (развернуть)"):
         st.write(st.session_state.curriculum["concepts"])
+
+    if st.session_state.last_processing_logs:
+        with st.expander("⚡ Производительность последней операции", expanded=False):
+            for log in st.session_state.last_processing_logs:
+                st.write(log)
 
     st.divider()
     st.subheader("Диалог с Тьютором")

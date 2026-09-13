@@ -1,7 +1,10 @@
 ﻿# core/orchestrator.py
-import json
+import asyncio
+import copy
+import hashlib
 import logging
-import io
+from collections import OrderedDict
+from time import perf_counter
 from typing import Dict, Any, Optional
 
 from langgraph.graph import StateGraph, END
@@ -9,6 +12,9 @@ from core.state import PipelineSessionState
 from core.mentor_agent import run_socratic_turn
 
 logger = logging.getLogger("orchestrator")
+
+_PIPELINE_CACHE_LIMIT = 8
+_pipeline_cache: OrderedDict[str, Dict[str, Any]] = OrderedDict()
 
 
 # =====================================================================
@@ -27,7 +33,7 @@ async def ingestion_node(state: PipelineSessionState) -> Dict[str, Any]:
     logs = list(state.get("thought_logs", []))
     logs.append(f"📄 [Ingestion Agent] Обработка файла `{filename}` ({file_type})...")
     markdown_result = ""
-    # Пытаемся вызвать реализацию Напарника 1, если модуль уже слит
+    started_at = perf_counter()
     try:
         import io
         from ingestion.document_parsers import extract_text
@@ -35,12 +41,15 @@ async def ingestion_node(state: PipelineSessionState) -> Dict[str, Any]:
         # 1. Заворачиваем байты в поток
         file_stream = io.BytesIO(file_bytes)
         # 2. ВЫЗЫВАЕМ функцию и сохраняем результат!
-        markdown_result = extract_text(file_stream, file_type)
-        
-        logs.append("✅ [Ingestion Agent] Документ успешно разобран и структурирован в Markdown.")
-    except (ImportError, AttributeError):
+        markdown_result = await asyncio.to_thread(extract_text, file_stream, file_type)
+
+        logs.append(
+            f"✅ [Ingestion Agent] Документ разобран за {perf_counter() - started_at:.1f} с "
+            f"({len(markdown_result):,} символов)."
+        )
+    except Exception as exc:
         # Graceful fallback для изолированной разработки
-        logger.warning("ingestion.parser_agent еще не реализован. Используем фоллбэк.")
+        logger.warning("Ingestion failed, using fallback: %s", exc)
         if file_bytes:
             try:
                 markdown_result = file_bytes.decode("utf-8", errors="ignore")
@@ -48,7 +57,7 @@ async def ingestion_node(state: PipelineSessionState) -> Dict[str, Any]:
                 markdown_result = "# Извлеченный материал лекции\nКонтент бинарного документа."
         else:
             markdown_result = "# Демонстрационный курс: Алгоритмы и структуры данных\nРазбор обхода графов (DFS)."
-        logs.append("ℹ️ [Ingestion Agent] Использован базовый парсер текста.")
+        logs.append(f"ℹ️ [Ingestion Agent] Использован базовый парсер текста: {exc}")
 
     return {
         "parsed_markdown": markdown_result,
@@ -64,14 +73,18 @@ async def curriculum_node(state: PipelineSessionState) -> Dict[str, Any]:
     markdown_content = state.get("parsed_markdown", "")
     logs = list(state.get("thought_logs", []))
     logs.append("🧠 [Curriculum Architect] Извлечение ключевых концепций и генерация задач...")
-# Пытаемся вызвать нашу реальную реализацию
-    lession_plan = {}
+    started_at = perf_counter()
     try:
-        from curriculum.architect_agent import generate_curriculum
-        # Снова убираем await
-        curriculum_data = generate_curriculum(markdown_content)
+        from curriculum.architect_agent import generate_curriculum, prepare_curriculum_source
+        prepared_content, was_truncated = prepare_curriculum_source(markdown_content)
+        if was_truncated:
+            logs.append(
+                f"⚡ [Curriculum Architect] Материал сокращён с {len(markdown_content):,} до "
+                f"{len(prepared_content):,} символов для быстрого ответа."
+            )
+        curriculum_data = await asyncio.to_thread(generate_curriculum, prepared_content)
         lesson_plan = curriculum_data.model_dump() if hasattr(curriculum_data, "model_dump") else curriculum_data
-        logs.append("✅ [Curriculum Architect] Учебный план и проверочные кейсы сгенерированы.")
+        logs.append(f"✅ [Curriculum Architect] План сгенерирован за {perf_counter() - started_at:.1f} с.")
     except Exception as e:
         # Graceful fallback для изолированной разработки
         logger.warning(f"Ошибка архитектора: {e}. Используем фоллбэк.")
@@ -118,6 +131,7 @@ async def mentor_node(state: PipelineSessionState) -> Dict[str, Any]:
             return {"success": True, "stdout": "Mock output: Code executed successfully.", "stderr": ""}
         tools_registry["run_code_sandbox"] = mock_sandbox
 
+    started_at = perf_counter()
     final_response = ""
     async for event in run_socratic_turn(chat_history, tools_registry, lesson_plan):
         if event["type"] == "thought":
@@ -126,6 +140,7 @@ async def mentor_node(state: PipelineSessionState) -> Dict[str, Any]:
             final_response = event["content"]
 
     chat_history.append({"role": "assistant", "content": final_response})
+    logs.append(f"✅ [Socratic Mentor] Ход завершён за {perf_counter() - started_at:.1f} с.")
 
     return {
         "chat_history": chat_history,
@@ -185,6 +200,14 @@ async def process_document_to_curriculum(
     """
     Запускает фазу 1 и 2: преобразование сырого файла в готовый курс.
     """
+    cache_key = hashlib.sha256(f"{file_type.lower()}\0".encode() + file_bytes).hexdigest()
+    cached_result = _pipeline_cache.get(cache_key)
+    if cached_result is not None:
+        _pipeline_cache.move_to_end(cache_key)
+        result = copy.deepcopy(cached_result)
+        result["thought_logs"] = ["⚡ [Cache] Для этого файла использован ранее построенный курс."]
+        return result
+
     initial_state: PipelineSessionState = {
         "raw_file_bytes": file_bytes,
         "filename": filename,
@@ -198,6 +221,13 @@ async def process_document_to_curriculum(
     }
 
     result = await pipeline_app.ainvoke(initial_state)
+    cache_entry = copy.deepcopy(result)
+    # The parsed result is useful on a cache hit; retaining every raw PDF is not.
+    cache_entry["raw_file_bytes"] = None
+    _pipeline_cache[cache_key] = cache_entry
+    _pipeline_cache.move_to_end(cache_key)
+    while len(_pipeline_cache) > _PIPELINE_CACHE_LIMIT:
+        _pipeline_cache.popitem(last=False)
     return result
 
 
